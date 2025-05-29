@@ -1,5 +1,3 @@
-What are you thoughts on this generalized code?
-
 import dash
 from dash import dcc, html, dash_table
 import pandas as pd
