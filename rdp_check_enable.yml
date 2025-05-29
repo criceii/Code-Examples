@@ -1,0 +1,42 @@
+---
+- name: Manage Remote Access on Windows Servers
+  hosts: windows
+  gather_facts: no
+  vars_files:
+  - path/to/your/group_vars/all/vars.yml
+  - path/to/your/group_vars/all/vault.yml
+  vars:
+    ansible_user: "{{ your_ansible_user }}"
+    ansible_password: "{{ your_ansible_password }}"
+
+  tasks:
+    - name: Check Remote Access State
+      ansible.windows.win_reg_stat:
+        path: HKLM:\System\CurrentControlSet\Control\Terminal Server
+        name: fDenyTSConnections
+      register: remote_access_state
+
+    - name: Display Remote Access State
+      debug:
+        msg: "Remote access is currently {{ 'disabled' if remote_access_state.value == 1 else 'enabled' }}."
+
+    - name: Enable Remote Access
+      ansible.windows.win_regedit:
+        path: HKLM:\System\CurrentControlSet\Control\Terminal Server
+        name: fDenyTSConnections
+        data: 0
+        type: dword
+      when: remote_access_state.value == 1
+      notify: configure_remote_access
+
+  handlers:
+    - name: stop_remote_service_forcefully
+      ansible.windows.win_shell: |
+        Stop-Service -Name 'TermService' -Force
+      listen: configure_remote_access
+
+    - name: start_remote_service
+      ansible.windows.win_service:
+        name: TermService
+        state: started
+      listen: configure_remote_access
