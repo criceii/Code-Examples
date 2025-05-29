@@ -1,0 +1,71 @@
+---
+- name: Install Software
+  hosts: windows
+  gather_facts: no
+  vars_files:
+    - path/to/your/group_vars/all/vars.yml
+    - path/to/your/group_vars/all/vault.yml
+  vars:
+    ansible_user: "{{ your_ansible_user }}"
+    ansible_password: "{{ your_ansible_password }}"
+    ansible_become_user: "{{ your_ansible_user }}"
+    ansible_become_password: "{{ your_ansible_password }}"
+    installer_path: '\\network\share\path\SoftwareInstaller.msi'
+    local_installer_path: 'C:\Temp\SoftwareInstaller.msi'
+    install_exe_path: 'C:\Program Files\Software\Application\software.exe'
+    required_space_gb: 10
+
+  tasks:
+    - name: Check if software is installed by checking for software.exe
+      ansible.windows.win_stat:
+        path: "{{ install_exe_path }}"
+      register: software_install_exe_check
+
+    - name: Get free disk space on C drive if software is not installed
+      ansible.windows.win_shell: |
+        $diskInfo = Get-PSDrive C | Select-Object Used, Free
+        $diskInfo | ConvertTo-Json
+      register: disk_info
+      when: not software_install_exe_check.stat.exists
+
+    - name: Set fact for free space on C drive if software is not installed
+      set_fact:
+        c_drive_free_space_gb: "{{ ((disk_info.stdout | from_json).Free / (1024 * 1024 * 1024)) | round(2) }}"
+      when: not software_install_exe_check.stat.exists
+
+    - name: Fail if not enough disk space on C drive for software installation
+      fail:
+        msg: "Not enough disk space on C:\ drive for software installation. At least 10GB is required, but only {{ c_drive_free_space_gb }} GB is available."
+      when:
+        - not software_install_exe_check.stat.exists
+        - c_drive_free_space_gb | float < required_space_gb
+
+    - name: Copy software installer from share to C:\Temp if not installed
+      ansible.windows.win_copy:
+        src: "{{ installer_path }}"
+        dest: "{{ local_installer_path }}"
+        remote_src: yes
+      become: true
+      become_method: runas
+      become_flags: logon_type=new_credentials logon_flags=netcredentials_only
+      when: not software_install_exe_check.stat.exists
+
+    - name: Install software if not already installed
+      ansible.windows.win_package:
+        path: "{{ local_installer_path }}"
+        arguments: '/qn /norestart'
+        state: present
+      when: not software_install_exe_check.stat.exists
+
+    - name: Verify software installation by checking for software.exe
+      ansible.windows.win_stat:
+        path: "{{ install_exe_path }}"
+      register: software_install_exe_verify
+      failed_when: not software_install_exe_verify.stat.exists
+      when: not software_install_exe_check.stat.exists
+
+    - name: Delete the local copy of software installer
+      ansible.windows.win_file:
+        path: "{{ local_installer_path }}"
+        state: absent
+      when: not software_install_exe_check.stat.exists
