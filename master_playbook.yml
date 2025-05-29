@@ -1,0 +1,19 @@
+---
+- hosts: windows
+  gather_facts: no
+
+- import_playbook: install_software1.yml
+- import_playbook: install_software2.yml
+- import_playbook: install_software3.yml
+- import_playbook: install_software4.yml
+#- import_playbook: install_software5.yml
+#- import_playbook: install_software6.yml
+#- import_playbook: install_software7.yml
+- import_playbook: install_software8.yml
+- import_playbook: install_software9.yml
+- import_playbook: install_software10.yml
+- import_playbook: install_software11.yml
+#- import_playbook: install_software12.yml
+- import_playbook: install_software13.yml
+#- import_playbook: install_software14.yml
+#- import_playbook: system_reboot.yml
